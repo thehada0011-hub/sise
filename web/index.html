@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공판장 경락가</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b3a'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d2320; --muted: #6b716d; --line: #e4e2dc;
+    --accent: #2f6b3a; --accent-soft: #e6efe7; --up: #c0392b; --down: #1f5fbf; --star: #d99a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141715; --panel: #1c201e; --ink: #e8ebe9; --muted: #9aa19c; --line: #2c322f;
+      --accent: #7cc48a; --accent-soft: #223025; --up: #ff7b6b; --down: #6fa8ff; --star: #f2c14e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+  button { font: inherit; color: inherit; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px; }
+
+  /* 관심 품목 카드 */
+  .watch-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 8px 0; }
+  .watch-head h2 { font-size: 16px; margin: 0; }
+  .watch-head span { color: var(--muted); font-size: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .card { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px 10px; cursor: pointer; min-width: 0; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card .nm { font-weight: 700; font-size: 16px; padding-right: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .nm small { font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .card .scope { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .price { font-size: clamp(28px, 4.2vw, 38px); font-weight: 800; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 8px; }
+  .card .price small { font-size: 15px; font-weight: 600; margin-left: 2px; color: var(--muted); }
+  .card .row2 { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-top: 2px; }
+  .card .row2 .rng { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .card .when { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .card svg { height: 44px; margin-top: 6px; }
+  .card .x { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 50%;
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; }
+  .card .x:hover { background: var(--bg); color: var(--ink); }
+  .card.hint { cursor: default; color: var(--muted); font-size: 14px; display: flex; align-items: center;
+    justify-content: center; text-align: center; min-height: 120px; border-style: dashed; }
+  .card.hint:hover { border-color: var(--line); }
+
+  .filters { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 20px 0 12px; }
+  .filters label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
+  select, input { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; width: 100%; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .panel h2 { font-size: 15px; margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .scroll { max-height: 70vh; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--panel); font-size: 12px; color: var(--muted); font-weight: 600; z-index: 1; }
+  th:first-child, td:first-child { text-align: left; }
+  tbody tr[data-i] { cursor: pointer; }
+  tbody tr[data-i]:hover { background: var(--accent-soft); }
+  tbody tr.sel { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+  .name b { font-weight: 600; }
+  .name small { color: var(--muted); margin-left: 4px; }
+  .star { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 16px;
+    padding: 0 6px 0 0; line-height: 1; vertical-align: -1px; }
+  .star.on { color: var(--star); }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+  .detail { padding: 14px; }
+  .detail .title { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+  .detail .title .star { font-size: 20px; }
+  .detail .meta { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .stat span { display: block; font-size: 12px; color: var(--muted); }
+  .stat strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+  .range { display: flex; gap: 6px; margin-bottom: 6px; }
+  .range button { font-size: 12px; border: 1px solid var(--line); background: var(--panel);
+    border-radius: 999px; padding: 3px 10px; cursor: pointer; }
+  .range button.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+  svg { width: 100%; height: auto; display: block; }
+  .empty { padding: 32px 16px; text-align: center; color: var(--muted); white-space: normal; }
+  .error { color: var(--up); }
+  @media (max-width: 860px) {
+    .filters { grid-template-columns: 1fr 1fr; }
+    .layout { grid-template-columns: 1fr; }
+    .scroll { max-height: none; }
+    .hide-m { display: none; }
+    .cards { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 10px; }
+    .card .price { font-size: 26px; }
+    .card { padding: 12px 12px 8px; }
+    .card .row2 { flex-direction: column; gap: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>전국 공판장·도매시장 경락가</h1>
+  <div class="sub" id="status">불러오는 중…</div>
+</header>
+<main>
+  <section>
+    <div class="watch-head"><h2>관심 품목</h2><span id="watchNote"></span></div>
+    <div class="cards" id="cards"></div>
+  </section>
+  <div class="filters">
+    <label>정산일자<select id="date"></select></label>
+    <label>도매시장<select id="market"><option value="">전국 전체</option></select></label>
+    <label>법인 구분<select id="corp_type">
+      <option value="">전체</option><option value="gong">공판장만</option><option value="corp">도매법인만</option>
+    </select></label>
+    <label>분류<select id="category"><option value="">전체</option></select></label>
+    <label>품목 검색<input id="q" type="search" placeholder="예: 사과, 배추"></label>
+  </div>
+  <div class="layout">
+    <section class="panel">
+      <h2 id="listTitle">품목별 가격</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th>품목 · 품종</th><th>단위</th><th>평균가</th><th>전일비</th>
+            <th class="hide-m">최저</th><th class="hide-m">최고</th><th class="hide-m">시장</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel" id="detail">
+      <div class="empty">왼쪽 목록에서 품목을 누르면<br>가격 추이와 시장별 비교가 나와요.</div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const won = (v) => v == null ? "-" : Math.round(v).toLocaleString("ko-KR");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const CORP_LABEL = { gong: "공판장", corp: "도매법인" };
+let summary = [], selected = null, trendDays = 30, watch = [];
+const filters = () => ({ market: $("market").value, category: $("category").value, corp_type: $("corp_type").value });
+
+async function api(path, params = {}, body) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null));
+  const res = await fetch(`${path}?${qs}`, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function pct(cur, prev) {
+  if (!cur || !prev) return null;
+  return (cur - prev) / prev * 100;
+}
+
+function change(cur, prev) {
+  const p = pct(cur, prev);
+  if (p == null) return `<span class="flat">-</span>`;
+  if (Math.abs(p) < 0.05) return `<span class="flat">0.0%</span>`;
+  return `<span class="${p > 0 ? "up" : "down"}">${p > 0 ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}%</span>`;
+}
+
+/* ---------------- 관심 품목 ---------------- */
+
+// 관심 품목은 품목·품종·단위와 등록할 때의 범위(시장, 법인 구분)로 구별한다
+const entryOf = (r) => ({ item: r.item, variety: r.variety ?? "", unit: r.unit ?? "", market: $("market").value, corp_type: $("corp_type").value });
+const keyOf = (e) => [e.item, e.variety ?? "", e.unit ?? "", e.market ?? "", e.corp_type ?? ""].join("|");
+const isWatched = (r) => watch.some((w) => keyOf(w) === keyOf(entryOf(r)));
+const starBtn = (r, attrs) => `<button class="star ${isWatched(r) ? "on" : ""}" ${attrs}
+  aria-label="관심 품목 ${isWatched(r) ? "해제" : "등록"}" title="관심 품목 ${isWatched(r) ? "해제" : "등록"}">${isWatched(r) ? "★" : "☆"}</button>`;
+
+function spark(points) {
+  const vals = points.map((p) => p.avg).filter((v) => v != null);
+  if (vals.length < 2) return "";
+  const W = 200, H = 44, min = Math.min(...vals), max = Math.max(...vals) || 1;
+  const x = (i) => 2 + (i / (vals.length - 1)) * (W - 4);
+  const y = (v) => max === min ? H / 2 : 4 + (1 - (v - min) / (max - min)) * (H - 8);
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const last = vals.length - 1;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    <circle cx="${x(last)}" cy="${y(vals[last])}" r="3" fill="var(--accent)"/></svg>`;
+}
+
+function renderWatch() {
+  $("watchNote").textContent = watch.length ? "카드를 누르면 자세히 볼 수 있어요" : "";
+  if (!watch.length) {
+    $("cards").innerHTML = `<div class="card hint">아래 목록에서 ☆를 누르면<br>여기에 시세가 크게 나와요.</div>`;
+    return;
+  }
+  const date = $("date").value;
+  $("cards").innerHTML = watch.map((w, i) => {
+    const pts = w.points || [];
+    const last = pts.at(-1), prev = pts.at(-2);
+    const scope = [w.market_name || "전국", CORP_LABEL[w.corp_type]].filter(Boolean).join(" · ");
+    const body = last ? `
+      <div class="price">${won(last.avg)}<small>원</small></div>
+      <div class="row2"><span>${change(last.avg, prev?.avg)}</span><span class="rng">${won(last.low)} ~ ${won(last.high)}</span></div>
+      <div class="when">${last.date === date ? `${date.slice(5).replace("-", "/")} 기준` : `최근 거래일 ${last.date.slice(5).replace("-", "/")}`}</div>
+      ${spark(pts)}` : `<div class="when" style="margin-top:14px">최근 30일 거래가 없어요</div>`;
+    return `<div class="card" data-w="${i}" role="button" tabindex="0">
+      <button class="x" data-unwatch="${i}" aria-label="관심 해제" title="관심 해제">×</button>
+      <div class="nm">${esc(w.item)}<small>${esc(w.variety)}</small></div>
+      <div class="scope">${esc(w.unit)} · ${esc(scope)}</div>${body}</div>`;
+  }).join("");
+}
+
+async function loadWatch() {
+  try {
+    watch = await api("/api/watch", { to: $("date").value });
+  } catch (e) {
+    watch = [];
+    $("cards").innerHTML = `<div class="card hint error">${esc(e.message)}</div>`;
+    return;
+  }
+  renderWatch();
+}
+
+async function setWatch(entry, on) {
+  try {
+    await api("/api/watch", {}, { action: on ? "add" : "remove", entry });
+  } catch (e) {
+    alert(`관심 품목 저장 실패: ${e.message}`);
+  }
+  await loadWatch();
+  renderRows();
+  if (selected) showDetail(false);
+}
+
+const toggleWatch = (r) => setWatch(entryOf(r), !isWatched(r));
+
+async function openWatch(w) {
+  // 카드에 보이는 날짜(그 품목의 최근 거래일)로 맞춰 연다
+  const lastDate = w.points?.at(-1)?.date;
+  if (lastDate && lastDate !== $("date").value && [...$("date").options].some((o) => o.value === lastDate)) {
+    $("date").value = lastDate;
+    loadWatch();
+  }
+  $("market").value = w.market || "";
+  $("corp_type").value = w.corp_type || "";
+  $("category").value = "";
+  $("q").value = "";
+  selected = { item: w.item, variety: w.variety || null, unit: w.unit };
+  await loadSummary();
+  if (!selected) {
+    $("detail").innerHTML = `<div class="empty">${$("date").value}에는 ${esc(w.item)} ${esc(w.variety)} 거래가 없어요.<br>정산일자를 바꿔 보세요.</div>`;
+  }
+  const tr = document.querySelector("tr.sel");
+  (matchMedia("(max-width: 860px)").matches ? $("detail") : tr || $("detail")).scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---------------- 목록 · 상세 ---------------- */
+
+function renderRows() {
+  const q = $("q").value.trim();
+  const list = q ? summary.filter((r) => `${r.item} ${r.variety}`.includes(q)) : summary;
+  $("listTitle").textContent = `품목별 가격 (${list.length.toLocaleString()}개)`;
+  $("rows").innerHTML = list.length ? list.map((r) => {
+    const i = summary.indexOf(r);
+    return `<tr data-i="${i}" class="${selected === r ? "sel" : ""}">
+      <td class="name">${starBtn(r, `data-star="${i}"`)}<b>${esc(r.item)}</b><small>${esc(r.variety)}</small></td>
+      <td>${esc(r.unit)}</td>
+      <td><strong>${won(r.avg)}</strong></td>
+      <td>${change(r.avg, r.prev_avg)}</td>
+      <td class="hide-m">${won(r.low)}</td>
+      <td class="hide-m">${won(r.high)}</td>
+      <td class="hide-m">${r.markets}</td>
+    </tr>`;
+  }).join("") : `<tr><td colspan="7" class="empty">해당하는 품목이 없어요.</td></tr>`;
+}
+
+function chart(points) {
+  if (points.length < 2) return `<div class="empty">추이를 그리려면 2일 이상 데이터가 필요해요.</div>`;
+  const W = 520, H = 220, P = { l: 60, r: 12, t: 12, b: 28 };
+  const ys = points.flatMap((p) => [p.low, p.high, p.avg]).filter((v) => v != null);
+  let min = Math.min(...ys), max = Math.max(...ys);
+  if (min === max) { min *= 0.9; max *= 1.1; }
+  const x = (i) => P.l + (i / (points.length - 1)) * (W - P.l - P.r);
+  const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
+  const band = points.map((p, i) => `${x(i)},${y(p.high ?? p.avg)}`).join(" ") + " " +
+    points.map((p, i) => `${x(i)},${y(p.low ?? p.avg)}`).reverse().join(" ");
+  const line = points.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.avg)}`).join("");
+  const ticks = [0, 0.5, 1].map((t) => min + (max - min) * t);
+  const labelIdx = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="평균가 추이">
+    ${ticks.map((v) => `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>
+      <text x="${P.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${won(v)}</text>`).join("")}
+    <polygon points="${band}" fill="var(--accent)" opacity="0.12"/>
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>
+    ${points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.avg)}" r="3" fill="var(--accent)"><title>${p.date}  평균 ${won(p.avg)}원 (최저 ${won(p.low)} / 최고 ${won(p.high)})</title></circle>`).join("")}
+    ${labelIdx.map((i) => `<text x="${x(i)}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}" font-size="11" fill="var(--muted)">${points[i].date.slice(5)}</text>`).join("")}
+  </svg>
+  <div class="meta" style="margin-top:4px">선: 가중평균가 · 음영: 최저~최고</div>`;
+}
+
+let detailCache = null;
+async function showDetail(refetch = true) {
+  const r = selected;
+  if (!r) return;
+  const base = { item: r.item, variety: r.variety, unit: r.unit };
+  if (refetch || !detailCache) {
+    $("detail").innerHTML = `<div class="detail"><div class="title">${esc(r.item)} ${esc(r.variety)}</div><div class="meta">불러오는 중…</div></div>`;
+    try {
+      const [trend, markets] = await Promise.all([
+        api("/api/trend", { ...base, ...filters(), days: trendDays, to: $("date").value }),
+        api("/api/markets", { ...base, ...filters(), date: $("date").value }),
+      ]);
+      detailCache = { trend, markets };
+    } catch (e) {
+      $("detail").innerHTML = `<div class="empty error">${esc(e.message)}</div>`;
+      return;
+    }
+  }
+  const { trend, markets } = detailCache;
+  $("detail").innerHTML = `<div class="detail">
+    <div class="title">${starBtn(r, "data-star-detail")}${esc(r.item)} <span style="font-weight:500">${esc(r.variety)}</span></div>
+    <div class="meta">${esc(r.category)} · ${esc(r.unit)} · ${$("date").value} 기준 · 가격 단위 원</div>
+    <div class="stats">
+      <div class="stat"><span>가중평균가</span><strong>${won(r.avg)}</strong></div>
+      <div class="stat"><span>최저 ~ 최고</span><strong>${won(r.low)} ~ ${won(r.high)}</strong></div>
+      <div class="stat"><span>총거래금액</span><strong>${won(r.amount / 10000)}만</strong></div>
+    </div>
+    <div class="range">${[14, 30, 90, 365].map((d) => `<button data-days="${d}" class="${d === trendDays ? "on" : ""}">${d === 365 ? "1년" : d + "일"}</button>`).join("")}</div>
+    ${chart(trend)}
+  </div>
+  <h2>시장별 비교 (${markets.length}곳)</h2>
+  <div class="scroll" style="max-height:320px"><table>
+    <thead><tr><th>도매시장 · 법인</th><th>평균가</th><th>최저</th><th>최고</th></tr></thead>
+    <tbody>${markets.map((m) => `<tr><td class="name"><b>${esc(m.market)}</b><small>${esc(m.corp)}</small></td>
+      <td><strong>${won(m.avg)}</strong></td><td>${won(m.low)}</td><td>${won(m.high)}</td></tr>`).join("")}</tbody>
+  </table></div>`;
+}
+
+async function loadSummary() {
+  $("rows").innerHTML = `<tr><td colspan="7" class="empty">불러오는 중…</td></tr>`;
+  try {
+    summary = await api("/api/summary", { date: $("date").value, ...filters() });
+    if (selected) selected = summary.find((r) => r.item === selected.item && (r.variety ?? null) === (selected.variety ?? null) && r.unit === selected.unit) || null;
+    renderRows();
+    if (selected) showDetail();
+  } catch (e) {
+    $("rows").innerHTML = `<tr><td colspan="7" class="empty error">${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function init() {
+  try {
+    const meta = await api("/api/meta");
+    if (!meta.dates.length) throw new Error("아직 수집된 데이터가 없어요. 먼저 '가격수집 실행'을 돌려주세요.");
+    $("date").innerHTML = meta.dates.map((d) => `<option>${d}</option>`).join("");
+    $("market").innerHTML += meta.markets.map((m) => `<option value="${esc(m.code)}">${esc(m.name)}</option>`).join("");
+    $("category").innerHTML += meta.categories.map((c) => `<option>${esc(c)}</option>`).join("");
+    const last = meta.log[0];
+    $("status").textContent = (last ? `마지막 수집 ${last.collected_at.replace("T", " ")} · ` : "") +
+      "출처: 한국농수산식품유통공사 전국 공영도매시장 정산정보";
+    await Promise.all([loadWatch(), loadSummary()]);
+  } catch (e) {
+    $("status").innerHTML = `<span class="error">${esc(e.message)}</span>`;
+    $("rows").innerHTML = "";
+  }
+}
+
+$("date").addEventListener("change", () => { loadWatch(); loadSummary(); });
+["market", "corp_type", "category"].forEach((id) => $(id).addEventListener("change", loadSummary));
+$("q").addEventListener("input", renderRows);
+$("rows").addEventListener("click", (e) => {
+  const star = e.target.closest("[data-star]");
+  if (star) return toggleWatch(summary[+star.dataset.star]);
+  const tr = e.target.closest("tr[data-i]");
+  if (!tr) return;
+  selected = summary[+tr.dataset.i];
+  renderRows();
+  showDetail();
+  if (matchMedia("(max-width: 860px)").matches) $("detail").scrollIntoView({ behavior: "smooth" });
+});
+$("detail").addEventListener("click", (e) => {
+  if (e.target.closest("[data-star-detail]")) return toggleWatch(selected);
+  const b = e.target.closest("button[data-days]");
+  if (!b) return;
+  trendDays = +b.dataset.days;
+  showDetail();
+});
+$("cards").addEventListener("click", (e) => {
+  const x = e.target.closest("[data-unwatch]");
+  if (x) return setWatch(watch[+x.dataset.unwatch], false);
+  const card = e.target.closest("[data-w]");
+  if (card) openWatch(watch[+card.dataset.w]);
+});
+$("cards").addEventListener("keydown", (e) => {
+  const card = e.target.closest("[data-w]");
+  if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openWatch(watch[+card.dataset.w]); }
+});
+init();
+</script>
+</body>
+</html>

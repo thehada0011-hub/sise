@@ -1,0 +1,10 @@
+# 인증키 — 절대 올리지 않는다 (GitHub에서는 저장소 Secrets의 API_KEY 사용)
+.env
+
+# PC에서 쌓이는 데이터와 결과물
+data/
+엑셀/
+logs/
+site/
+__pycache__/
+.playwright-mcp/

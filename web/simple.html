@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f5e2c">
+<meta name="mobile-web-app-capable" content="yes">
+<title>농산물 시세</title>
+<!-- export:head -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5e2c'/%3E%3Cpath d='M7 22l6-7 5 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  /* 70~80대 기준: 큰 글씨, 강한 대비, 손가락보다 큰 버튼, 색에만 의존하지 않는 표현 */
+  :root {
+    color-scheme: light;
+    --bg: #f4f1ea; --card: #ffffff; --ink: #111111; --ink2: #3b3b3b; --line: #d8d2c4;
+    --green: #1f5e2c; --green-dark: #164722; --green-soft: #e7f1e9;
+    --up: #c62828; --up-bg: #fdecea; --down: #1251a3; --down-bg: #e8f0fb; --flat-bg: #efefef;
+    --star: #b7860b; --star-bg: #fff4d6;
+  }
+  html { font-size: 100%; -webkit-text-size-adjust: 100%; }
+  html[data-size="1"] { font-size: 115%; }
+  html[data-size="2"] { font-size: 130%; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 1.25rem/1.45 "Pretendard", "Malgun Gothic", system-ui, sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px calc(24px + env(safe-area-inset-bottom)); }
+  svg { display: block; }
+
+  /* 위쪽 줄 */
+  .topbar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 2px solid var(--line); }
+  .topbar .in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; min-height: 4.5rem; }
+  .topbar h1 { flex: 1; font-size: 1.6rem; margin: 0; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .back { flex: none; display: none; align-items: center; gap: 4px; min-height: 3.5rem; padding: 0 14px 0 8px;
+    border: 2px solid var(--ink); border-radius: 14px; background: var(--card); font-weight: 800; font-size: 1.15rem; }
+  .back svg { width: 1.4em; height: 1.4em; }
+  body.sub .back { display: inline-flex; }
+  .size-btn { flex: none; min-width: 3.5rem; min-height: 3.5rem; border: 2px solid var(--ink); border-radius: 14px;
+    background: var(--card); font-weight: 800; font-size: 1.1rem; line-height: 1.1; padding: 4px 8px; }
+  .size-btn small { display: block; font-size: 0.7rem; font-weight: 600; }
+
+  /* 첫 화면: 물어보기 버튼이 화면 대부분을 차지 */
+  /* 첫 화면 전체가 하나의 초록 판: 가운데 물어보기, 아래 즐겨찾기·글자로 찾기 */
+  .home { display: flex; flex-direction: column; gap: 12px; min-height: calc(100dvh - 4.5rem - 2px - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 28px);
+    margin: 14px 0 calc(-14px + env(safe-area-inset-bottom)); padding: 18px 14px 14px;
+    background: var(--green); color: #fff; border-radius: 28px; box-shadow: 0 8px 22px rgba(31,94,44,.35); }
+  .home .date { font-size: 1.15rem; text-align: center; opacity: .95; }
+  .bigmic { flex: 1; min-height: 16rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    border: 0; border-radius: 22px; background: transparent; color: #fff; padding: 12px; }
+  .bigmic:active { background: rgba(0,0,0,.12); }
+  .bigmic .circle { width: 9rem; height: 9rem; border-radius: 50%; background: rgba(255,255,255,.16); display: grid; place-items: center; }
+  .bigmic .circle svg { width: 5rem; height: 5rem; }
+  .bigmic b { font-size: 2.1rem; letter-spacing: -0.02em; }
+  .bigmic span { font-size: 1.25rem; opacity: .92; }
+  .home-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  /* 초록 판과 같은 계열: 마이크 원처럼 밝은 반투명 초록 + 흰 글씨 */
+  .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 7rem;
+    border: 2px solid rgba(255,255,255,.45); border-radius: 20px; background: rgba(255,255,255,.16); color: #fff;
+    font-size: 1.35rem; font-weight: 800; }
+  .tile:active { background: rgba(255,255,255,.28); }
+  .tile svg { width: 2.4rem; height: 2.4rem; color: #fff; }
+  .tile.fav svg { color: #ffd54f; }
+  .tile small { font-size: 1rem; font-weight: 600; color: rgba(255,255,255,.9); }
+
+  /* 품목 화면 */
+  .item-head { padding: 16px 2px 4px; }
+  .item-head .name { font-size: 2.1rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.2; }
+  .item-head .name span { font-size: 1.5rem; font-weight: 700; color: var(--ink2); margin-left: 6px; }
+  .item-head .meta { font-size: 1.1rem; color: var(--ink2); margin-top: 4px; }
+  .pricebox { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 16px 18px; margin-top: 10px; }
+  .price { font-size: 3.4rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .price small { font-size: 1.6rem; font-weight: 700; margin-left: 4px; }
+  .chg { display: inline-flex; align-items: center; gap: 6px; font-size: 1.2rem; font-weight: 700; border-radius: 12px; padding: 6px 12px; margin-top: 8px; }
+  .chg.up { color: var(--up); background: var(--up-bg); }
+  .chg.down { color: var(--down); background: var(--down-bg); }
+  .chg.flat { color: var(--ink2); background: var(--flat-bg); }
+  .range { font-size: 1.1rem; color: var(--ink2); margin-top: 10px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .act { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 4rem; border-radius: 16px;
+    border: 2px solid var(--green); background: var(--card); color: var(--green); font-size: 1.2rem; font-weight: 800; padding: 6px; }
+  .act svg { width: 1.5em; height: 1.5em; flex: none; }
+  .act.star { border-color: var(--star); color: var(--star); }
+  .act.star.on { background: var(--star-bg); }
+
+  h3 { font-size: 1.35rem; margin: 26px 2px 10px; }
+  .panel { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 14px 16px; }
+  .chart-note { font-size: 1.1rem; color: var(--ink2); margin-bottom: 6px; }
+  .chart-note b { color: var(--ink); }
+  .chart-sum { font-size: 1.15rem; font-weight: 700; margin-top: 8px; }
+
+  .rowbtn { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 4rem;
+    background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 10px 14px; margin-bottom: 8px; text-align: left; font-size: 1.2rem; }
+  .rowbtn b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rowbtn .sub { display: block; font-size: 1rem; color: var(--ink2); }
+
+  .mkt { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+  .mkt:last-child { border-bottom: 0; }
+  .mkt .nm { font-weight: 800; font-size: 1.2rem; }
+  .mkt .nm small { display: block; font-weight: 500; font-size: 1rem; color: var(--ink2); }
+  .mkt .pr { font-weight: 800; font-size: 1.3rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mkt .tag { font-size: 0.9rem; font-weight: 700; border-radius: 8px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+  .tag.hi { background: var(--up-bg); color: var(--up); }
+  .tag.lo { background: var(--down-bg); color: var(--down); }
+  .more-btn { width: 100%; min-height: 3.5rem; margin-top: 8px; border: 2px solid var(--ink); border-radius: 14px; background: var(--card); font-weight: 800; }
+
+  /* 즐겨찾기 카드 */
+  .fcard { display: block; width: 100%; text-align: left; background: var(--card); border: 2px solid var(--line); border-radius: 22px;
+    padding: 16px 18px; margin-bottom: 12px; }
+  .fcard .name { font-size: 1.6rem; font-weight: 800; }
+  .fcard .name span { font-size: 1.2rem; font-weight: 600; color: var(--ink2); margin-left: 6px; }
+  .fcard .unit { font-size: 1.05rem; color: var(--ink2); }
+  .fcard .price { font-size: 2.8rem; margin-top: 6px; }
+
+  /* 검색 */
+  .searchbox { position: sticky; top: calc(4.5rem + 2px + env(safe-area-inset-top)); background: var(--bg); padding: 14px 0 10px; z-index: 4; }
+  .searchbox input { width: 100%; font: inherit; font-size: 1.5rem; padding: 16px 18px; border: 3px solid var(--ink); border-radius: 18px; background: #fff; }
+
+  .notice { background: #fff8e1; border: 2px solid #e8c766; border-radius: 16px; padding: 14px 16px; font-size: 1.1rem; margin: 14px 0; }
+  .empty { text-align: center; color: var(--ink2); font-size: 1.2rem; padding: 40px 10px; }
+  .loading { text-align: center; color: var(--ink2); font-size: 1.3rem; padding: 60px 10px; }
+
+  /* 듣는 중 화면 */
+  .sheet { position: fixed; inset: 0; background: var(--bg); z-index: 10; display: none; flex-direction: column;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  .sheet.open { display: flex; }
+  .sheet .inner { width: 100%; max-width: 560px; margin: 0 auto; flex: 1; display: flex; flex-direction: column; }
+  .sheet .msg { font-size: 1.9rem; font-weight: 800; text-align: center; margin: 4vh 0 8px; line-height: 1.3; }
+  .sheet .hint { font-size: 1.25rem; color: var(--ink2); text-align: center; }
+  .sheet .heard { font-size: 1.3rem; text-align: center; margin: 8px 0; color: var(--ink2); }
+  .pulse { width: 10rem; height: 10rem; border-radius: 50%; background: var(--green); margin: 10vh auto 0; display: grid; place-items: center; color: #fff;
+    animation: pulse 1.4s ease-out infinite; }
+  .pulse svg { width: 4.5rem; height: 4.5rem; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(31,94,44,.45); } 100% { box-shadow: 0 0 0 2.4rem rgba(31,94,44,0); } }
+  @media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+  .sheet .actions { margin-top: auto; display: grid; gap: 12px; padding-top: 20px; }
+  .btn { min-height: 4.25rem; border-radius: 18px; font-size: 1.4rem; font-weight: 800; border: 2px solid var(--ink); background: #fff; }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="in">
+  <button class="back" id="backBtn" aria-label="처음 화면으로">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>처음
+  </button>
+  <h1 id="title">농산물 시세</h1>
+  <button class="size-btn" id="sizeBtn" aria-label="글씨 크기 바꾸기">가<small>글씨 크게</small></button>
+</div></div>
+<div class="wrap"><main id="view"><div class="loading">불러오는 중…</div></main></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-live="polite">
+  <div class="inner" id="sheetInner"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const won = (v) => v == null ? "-" : Math.round(v).toLocaleString("ko-KR");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const synth = window.speechSynthesis;
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechSupported = !!Recognition;
+
+const ICON = {
+  mic: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>`,
+  speak: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>`,
+  star: (on) => `<svg viewBox="0 0 24 24" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>`,
+};
+
+let base = null;            // /api/simple: 날짜, 품목 이름 목록, 처음 즐겨찾기
+const itemCache = new Map(); // 품목 이름 → /api/item 결과
+
+/* ---------------- 저장 (이 휴대폰에만) ---------------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const favKey = (f) => [f.item, f.variety || "", f.unit || ""].join("|");
+const getFavs = () => store.get("favs", null) ?? [];
+const isFav = (f) => getFavs().some((x) => favKey(x) === favKey(f));
+function toggleFav(f) {
+  const favs = getFavs();
+  const on = !isFav(f);
+  store.set("favs", on ? [...favs, { item: f.item, variety: f.variety || "", unit: f.unit || "" }] : favs.filter((x) => favKey(x) !== favKey(f)));
+  return on;
+}
+
+function setSize(n) {
+  document.documentElement.dataset.size = n;
+  $("sizeBtn").querySelector("small").textContent = n === 2 ? "원래대로" : "글씨 크게";
+  store.set("fontSize", n);
+}
+setSize(store.get("fontSize", 0));
+$("sizeBtn").addEventListener("click", () => setSize(((+document.documentElement.dataset.size || 0) + 1) % 3));
+
+/* ---------------- 말 / 글 ---------------- */
+const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
+const dayText = (iso) => { const d = new Date(iso + "T00:00:00"); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEK[d.getDay()]}요일`; };
+const shortDay = (iso) => { const d = new Date(iso + "T00:00:00"); return `${d.getMonth() + 1}/${d.getDate()}`; };
+const round100 = (v) => Math.round(v / 100) * 100;
+const hasVariety = (r, item) => r.variety && r.variety !== item;
+
+function changeInfo(cur, prev, label = "지난 경매") {
+  if (!cur || !prev) return { cls: "flat", text: `${label} 가격이 없어요`, say: "" };
+  const diff = round100(cur - prev);
+  const pct = Math.abs((cur - prev) / prev * 100).toFixed(0);
+  if (diff === 0) return { cls: "flat", text: `${label}와 같아요`, say: `${label}와 비슷해요.` };
+  const up = diff > 0;
+  return {
+    cls: up ? "up" : "down",
+    text: `${up ? "▲" : "▼"} ${label}보다 ${Math.abs(diff).toLocaleString("ko-KR")}원 ${up ? "올랐어요" : "내렸어요"}`,
+    say: `${label}보다 ${Math.abs(diff)}원, ${pct}퍼센트 ${up ? "올랐어요" : "내렸어요"}.`,
+  };
+}
+
+function speech(name, r, date) {
+  const label = [name, hasVariety(r, name) ? r.variety : ""].filter(Boolean).join(" ");
+  const unit = r.unit ? r.unit.replace("kg", "킬로").replace(/(\d)g$/, "$1그램") + " 기준, " : "";
+  const when = date && date !== base?.date ? `${dayText(date)} 경매, ` : "";
+  return `${label}, ${when}${unit}전국 평균 ${round100(r.avg)}원입니다. ${changeInfo(r.avg, r.prev_avg).say}`;
+}
+
+let koVoice = null;
+const pickVoice = () => { koVoice = synth.getVoices().find((v) => v.lang?.startsWith("ko")) || null; };
+if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
+function say(text) {
+  if (!synth) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ko-KR";
+  if (koVoice) u.voice = koVoice;
+  u.rate = 0.9; // 어르신이 알아듣기 쉽게 조금 천천히
+  synth.speak(u);
+}
+
+/* ---------------- 데이터 ---------------- */
+async function getJSON(url) {
+  // 하루 두 번 갱신되므로 휴대폰에 남은 옛 시세 대신 항상 새로 확인한다
+  const res = await fetch(url, { cache: "no-cache" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+// PC 대시보드에서는 /api/…를, 인터넷에 올린 사이트에서는 export_static.py가 만든 JSON 파일을 읽는다
+const STATIC_DATA = false; // export_static.py가 true로 바꿔서 내보낸다
+const URLS = STATIC_DATA
+  ? { simple: "data/simple.json", item: (n) => base.files?.[n] && `data/items/${base.files[n]}` }
+  : { simple: "/api/simple", item: (n) => `/api/item?name=${encodeURIComponent(n)}` };
+
+function getItem(name) {
+  if (!itemCache.has(name)) {
+    const url = URLS.item(name);
+    const p = url ? getJSON(url) : Promise.resolve({ name, date: null, rows: [] });
+    itemCache.set(name, p.catch((e) => { itemCache.delete(name); throw e; }));
+  }
+  return itemCache.get(name);
+}
+
+// 말하거나 적은 문장에서 가장 길게 일치하는 품목·품종을 찾는다 ("방울토마토"가 "토마토"보다 우선)
+const norm = (s) => String(s || "").replace(/\s+/g, "");
+function findName(text) {
+  const t = norm(text);
+  let best = null, bestLen = 0;
+  for (const n of base.names) {
+    for (const [name, variety] of [[n.item, n.variety], [n.item, null]]) {
+      const key = norm(variety || name);
+      if (key && t.includes(key) && key.length > bestLen) { best = { item: name, variety }; bestLen = key.length; }
+    }
+  }
+  return best;
+}
+
+/* ---------------- 화면 이동 (갤럭시 뒤로가기 버튼으로 돌아갈 수 있게 주소 뒤 #로) ---------------- */
+const go = (hash) => { location.hash = hash; };
+const itemHash = (item, variety, unit) => {
+  const p = new URLSearchParams();
+  if (variety) p.set("v", variety);
+  if (unit) p.set("u", unit);
+  return `#/item/${encodeURIComponent(item)}${p.toString() ? "?" + p : ""}`;
+};
+$("backBtn").addEventListener("click", () => go("#/"));
+
+let autoSpeak = false;
+function route() {
+  closeSheet();
+  synth?.cancel();
+  window.scrollTo(0, 0);
+  const h = location.hash.slice(1) || "/";
+  const [path, query] = h.split("?");
+  const params = new URLSearchParams(query || "");
+  document.body.classList.toggle("sub", path !== "/");
+  if (path.startsWith("/item/")) return viewItem(decodeURIComponent(path.slice(6)), params.get("v"), params.get("u"));
+  if (path === "/fav") return viewFav();
+  if (path === "/search") return viewSearch();
+  viewHome();
+}
+window.addEventListener("hashchange", route);
+
+/* ---------------- 첫 화면 ---------------- */
+function viewHome() {
+  $("title").textContent = "농산물 시세";
+  const n = getFavs().length;
+  $("view").innerHTML = `<div class="home">
+    <div class="date">${dayText(base.date)} 경매 가격</div>
+    ${speechSupported
+      ? `<button class="bigmic" id="bigMic"><div class="circle">${ICON.mic}</div><b>눌러서 말씀하세요</b><span>예: “사과 시세”</span></button>`
+      : `<button class="bigmic" data-go="#/search"><div class="circle">${ICON.search}</div><b>눌러서 품목 찾기</b><span>이 휴대폰은 말로 묻기가 안 돼서<br>글자로 찾아요</span></button>`}
+    <div class="home-actions">
+      <button class="tile fav" data-go="#/fav">${ICON.star(true)}즐겨찾기<small>${n ? `${n}개` : "비어 있어요"}</small></button>
+      <button class="tile" data-go="#/search">${ICON.search}글자로 찾기<small>품목 이름 적기</small></button>
+    </div>
+  </div>`;
+  $("bigMic")?.addEventListener("click", listen);
+}
+
+/* ---------------- 품목 화면 ---------------- */
+function chart(trend) {
+  const pts = trend.filter((p) => p.avg);
+  if (pts.length < 2) return `<div class="chart-note">그래프를 그릴 만큼 거래 기록이 없어요.</div>`;
+  const W = 340, H = 190, P = { l: 6, r: 14, t: 16, b: 30 };
+  const vals = pts.map((p) => p.avg);
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (min === max) { min *= 0.95; max *= 1.05; }
+  const x = (i) => P.l + (i / (pts.length - 1)) * (W - P.l - P.r);
+  const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.avg).toFixed(1)}`).join("");
+  const area = `${line}L${x(pts.length - 1).toFixed(1)},${H - P.b}L${x(0).toFixed(1)},${H - P.b}Z`;
+  const last = pts.length - 1;
+  const hi = vals.indexOf(Math.max(...vals)), lo = vals.indexOf(Math.min(...vals));
+  const first = pts[0], end = pts[last];
+  const ch = changeInfo(end.avg, first.avg, shortDay(first.date));
+  return `
+    <div class="chart-note">가장 비쌀 때 <b>${won(vals[hi])}원</b> (${shortDay(pts[hi].date)}) · 가장 쌀 때 <b>${won(vals[lo])}원</b> (${shortDay(pts[lo].date)})</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 가격 그래프" style="width:100%;height:auto">
+      <line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="#bdb6a6" stroke-width="1.5"/>
+      <path d="${area}" fill="var(--green)" opacity="0.10"/>
+      <path d="${line}" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${x(hi)}" cy="${y(vals[hi])}" r="5" fill="var(--up)"/>
+      <circle cx="${x(lo)}" cy="${y(vals[lo])}" r="5" fill="var(--down)"/>
+      <circle cx="${x(last)}" cy="${y(end.avg)}" r="7" fill="var(--green)" stroke="#fff" stroke-width="3"/>
+      <text x="${P.l}" y="${H - 8}" font-size="15" fill="#3b3b3b">${shortDay(first.date)}</text>
+      <text x="${W - P.r}" y="${H - 8}" font-size="15" fill="#3b3b3b" text-anchor="end">${shortDay(end.date)}</text>
+    </svg>
+    <div class="chart-sum" style="color:var(--${ch.cls === "flat" ? "ink2" : ch.cls})">${ch.text}</div>`;
+}
+
+const MKT_SHOW = 8;
+function marketList(markets, showAll) {
+  if (!markets.length) return `<div class="chart-note">시장별 기록이 없어요.</div>`;
+  const sorted = [...markets].sort((a, b) => b.avg - a.avg);
+  const list = showAll ? sorted : sorted.slice(0, MKT_SHOW);
+  return list.map((m) => `<div class="mkt">
+      <div class="nm">${esc(m.market)}${sorted.length > 1 && m === sorted[0] ? `<span class="tag hi">가장 비쌈</span>` : ""}${sorted.length > 1 && m === sorted.at(-1) ? `<span class="tag lo">가장 쌈</span>` : ""}<small>${esc(m.corp)}</small></div>
+      <div class="pr">${won(m.avg)}원</div></div>`).join("")
+    + (!showAll && sorted.length > MKT_SHOW ? `<button class="more-btn" id="moreMkt">전국 ${sorted.length}곳 모두 보기</button>` : "");
+}
+
+async function viewItem(name, variety, unit) {
+  $("title").textContent = name;
+  $("view").innerHTML = `<div class="loading">${esc(name)} 시세를 불러오는 중…</div>`;
+  let data;
+  try { data = await getItem(name); } catch { $("view").innerHTML = `<div class="notice">시세를 불러오지 못했어요.<br>인터넷 연결을 확인해 주세요.</div>`; return; }
+  if (!data.rows.length) { $("view").innerHTML = `<div class="empty">최근 ${esc(name)} 거래가 없어요.</div>`; return; }
+  // 고른 품종·단위 → 즐겨찾기한 것 → 거래가 가장 많은 것 순으로 보여줄 줄을 고른다
+  const favs = getFavs().filter((f) => f.item === name);
+  const r = data.rows.find((x) => variety && x.variety === variety && (!unit || x.unit === unit))
+    || data.rows.find((x) => favs.some((f) => (f.variety || "") === (x.variety || "") && f.unit === x.unit))
+    || data.rows[0];
+  const fav = { item: name, variety: r.variety, unit: r.unit };
+  const ch = changeInfo(r.avg, r.prev_avg);
+  const others = data.rows.filter((x) => x !== r);
+  $("view").innerHTML = `
+    <div class="item-head">
+      <div class="name">${esc(name)}${hasVariety(r, name) ? `<span>${esc(r.variety)}</span>` : ""}</div>
+      <div class="meta">${esc(r.unit)} 기준 · 전국 평균 · ${dayText(data.date)} 경매</div>
+    </div>
+    <div class="pricebox">
+      <div class="price">${won(r.avg)}<small>원</small></div>
+      <div class="chg ${ch.cls}">${ch.text}</div>
+      <div class="range">싼 것 ${won(r.low)}원 ~ 비싼 것 ${won(r.high)}원</div>
+      <div class="two">
+        <button class="act" id="speakBtn">${ICON.speak}소리로 듣기</button>
+        <button class="act star ${isFav(fav) ? "on" : ""}" id="favBtn">${ICON.star(isFav(fav))}<span>${isFav(fav) ? "즐겨찾기 됨" : "즐겨찾기"}</span></button>
+      </div>
+    </div>
+    <h3>최근 두 달 가격</h3>
+    <div class="panel">${chart(r.trend)}</div>
+    ${others.length ? `<h3>다른 종류·단위</h3>${others.slice(0, 6).map((x) => `
+      <button class="rowbtn" data-go="${esc(itemHash(name, x.variety, x.unit))}"><span>${esc(hasVariety(x, name) ? x.variety : name)}<span class="sub">${esc(x.unit)} 기준</span></span><b>${won(x.avg)}원</b></button>`).join("")}` : ""}
+    <h3>전국 시장별 시세</h3>
+    <div class="panel" id="mktPanel">${marketList(r.markets, false)}</div>`;
+  $("speakBtn").addEventListener("click", () => say(speech(name, r, data.date)));
+  $("favBtn").addEventListener("click", (e) => {
+    const on = toggleFav(fav);
+    e.currentTarget.classList.toggle("on", on);
+    e.currentTarget.innerHTML = `${ICON.star(on)}<span>${on ? "즐겨찾기 됨" : "즐겨찾기"}</span>`;
+    say(on ? "즐겨찾기에 넣었어요." : "즐겨찾기에서 뺐어요.");
+  });
+  $("mktPanel").addEventListener("click", (e) => { if (e.target.id === "moreMkt") $("mktPanel").innerHTML = marketList(r.markets, true); });
+  if (autoSpeak) { autoSpeak = false; say(speech(name, r, data.date)); }
+}
+
+/* ---------------- 즐겨찾기 ---------------- */
+async function viewFav() {
+  $("title").textContent = "즐겨찾기";
+  const favs = getFavs();
+  if (!favs.length) {
+    $("view").innerHTML = `<div class="empty">아직 즐겨찾기가 없어요.<br><br>품목 화면에서<br><b>☆ 즐겨찾기</b> 버튼을 누르면<br>여기서 바로 볼 수 있어요.</div>`;
+    return;
+  }
+  $("view").innerHTML = `<div class="loading">불러오는 중…</div>`;
+  const names = [...new Set(favs.map((f) => f.item))];
+  const results = Object.fromEntries(await Promise.all(names.map(async (n) => [n, await getItem(n).catch(() => null)])));
+  $("view").innerHTML = `<div style="height:14px"></div>` + favs.map((f) => {
+    const d = results[f.item];
+    const r = d?.rows.find((x) => (x.variety || "") === (f.variety || "") && x.unit === f.unit);
+    const head = `<div class="name">${esc(f.item)}${f.variety && f.variety !== f.item ? `<span>${esc(f.variety)}</span>` : ""}</div><div class="unit">${esc(f.unit)} 기준 · 전국 평균</div>`;
+    if (!r) return `<button class="fcard" data-go="${esc(itemHash(f.item, f.variety, f.unit))}">${head}<div class="range">최근 거래가 없어요</div></button>`;
+    const ch = changeInfo(r.avg, r.prev_avg);
+    const older = d.date !== base.date ? `<div class="range">${dayText(d.date)} 경매</div>` : "";
+    return `<button class="fcard" data-go="${esc(itemHash(f.item, f.variety, f.unit))}">${head}
+      <div class="price">${won(r.avg)}<small>원</small></div><div class="chg ${ch.cls}">${ch.text}</div>${older}</button>`;
+  }).join("");
+}
+
+/* ---------------- 검색 ---------------- */
+function viewSearch() {
+  $("title").textContent = "글자로 찾기";
+  $("view").innerHTML = `
+    <div class="searchbox"><input id="q" type="search" placeholder="품목 이름 (예: 사과)" autocomplete="off" aria-label="품목 이름"></div>
+    <div id="results"><div class="empty">찾으실 품목 이름을<br>적어 주세요</div></div>`;
+  const input = $("q");
+  input.addEventListener("input", () => {
+    const t = norm(input.value);
+    if (!t) { $("results").innerHTML = `<div class="empty">찾으실 품목 이름을<br>적어 주세요</div>`; return; }
+    const hits = base.names.filter((n) => norm(n.item).includes(t) || norm(n.variety).includes(t)).slice(0, 30);
+    $("results").innerHTML = hits.length ? hits.map((n) => `
+      <button class="rowbtn" data-go="${esc(itemHash(n.item, n.variety))}"><span>${esc(n.item)}${n.variety && n.variety !== n.item ? `<span class="sub">${esc(n.variety)}</span>` : ""}</span><b>›</b></button>`).join("")
+      : `<div class="empty">“${esc(input.value)}”(은)는 찾지 못했어요</div>`;
+  });
+  setTimeout(() => input.focus(), 80);
+}
+
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-go]");
+  if (g) go(g.dataset.go);
+});
+
+/* ---------------- 말로 물어보기 ---------------- */
+let rec = null;
+function sheet(html) { $("sheetInner").innerHTML = html; $("sheet").classList.add("open"); }
+function closeSheet() { rec?.abort(); $("sheet").classList.remove("open"); }
+
+function listen() {
+  if (!speechSupported) return go("#/search");
+  synth?.cancel();
+  rec?.abort();
+  rec = new Recognition();
+  rec.lang = "ko-KR";
+  rec.interimResults = false;
+  rec.maxAlternatives = 3;
+  let done = false;
+  const fail = (error, heard) => {
+    done = true;
+    const denied = error === "not-allowed" || error === "service-not-allowed";
+    const msg = heard ? "찾지 못했어요" : denied ? "마이크를 쓸 수 없어요" : "잘 듣지 못했어요";
+    const hint = heard ? "품목 이름만 또박또박<br>다시 말씀해 주세요"
+      : denied ? "휴대폰 설정에서 마이크를 허용해 주세요.<br>글자로도 찾을 수 있어요."
+      : "조용한 곳에서 휴대폰을 입 가까이 대고<br>다시 말씀해 주세요";
+    sheet(`<div class="msg" style="margin-top:12vh">${msg}</div>
+      ${heard ? `<div class="heard">“${esc(heard)}”(이)라고 들었어요</div>` : ""}
+      <div class="hint">${hint}</div>
+      <div class="actions">
+        ${denied ? "" : `<button class="btn primary" data-act="again">다시 말하기</button>`}
+        <button class="btn" data-act="type">글자로 찾기</button>
+        <button class="btn" data-act="close">닫기</button>
+      </div>`);
+    if (heard) say("찾지 못했어요. 품목 이름을 다시 말씀해 주세요.");
+  };
+  rec.onresult = (e) => {
+    done = true;
+    const alts = [...e.results[0]].map((a) => a.transcript);
+    const hit = alts.map(findName).find(Boolean);
+    if (!hit) return fail("no-match", alts[0]);
+    closeSheet();
+    autoSpeak = true;
+    go(itemHash(hit.item, hit.variety));
+  };
+  rec.onerror = (e) => { if (e.error !== "aborted") fail(e.error); else done = true; };
+  rec.onend = () => { if (!done && $("sheet").classList.contains("open")) fail("no-speech"); };
+  sheet(`<div class="pulse">${ICON.mic}</div>
+    <div class="msg">듣고 있어요</div>
+    <div class="hint">“사과 시세”처럼<br>품목 이름을 말씀해 주세요</div>
+    <div class="actions"><button class="btn" data-act="close">그만두기</button></div>`);
+  try { rec.start(); } catch { closeSheet(); go("#/search"); }
+}
+
+$("sheet").addEventListener("click", (e) => {
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  if (act === "close") closeSheet();
+  if (act === "again") listen();
+  if (act === "type") { closeSheet(); go("#/search"); }
+});
+
+/* ---------------- 시작 ---------------- */
+(async () => {
+  try {
+    base = await getJSON(URLS.simple);
+    if (!base.date) throw new Error("no data");
+  } catch {
+    $("view").innerHTML = `<div class="notice">시세를 불러오지 못했어요.<br>인터넷 연결을 확인하고 다시 열어 주세요.</div>`;
+    return;
+  }
+  // 처음 쓰는 휴대폰이면 자녀가 골라 둔 관심 품목으로 즐겨찾기를 채운다
+  if (store.get("favs", null) == null) store.set("favs", base.watch);
+  route();
+})();
+
+// 인터넷에 올린 사이트는 홈 화면에 앱으로 설치할 수 있게 서비스 워커를 등록한다
+if (STATIC_DATA && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
