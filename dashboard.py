@@ -32,6 +32,8 @@ UNIT = "COALESCE(printf('%g', unit_qty), '') || COALESCE(unit_nm, '')"
 # 일요일·연휴에 몇 건만 정산되는 날은 비교 기준에서 뺀다 (평일은 하루 수만 건)
 TRADING_DAY_ROWS = 1000
 TRADING_DAYS = f"SELECT trd_date FROM collect_log WHERE rows >= {TRADING_DAY_ROWS}"
+# 부모님 화면에서 상세히 보여줄 지역: 도매시장 코드 앞 두 자리가 지역 (24 = 광주: 광주각화·광주서부)
+LOCAL_REGION = {"code": "24", "name": "광주"}
 
 
 def db() -> sqlite3.Connection:
@@ -58,6 +60,9 @@ def market_filter(q: dict) -> tuple[str, list]:
     if q.get("item_name"):
         where.append("gds_mclsf_nm = ?")
         params.append(q["item_name"])
+    if q.get("region"):
+        where.append("whsl_mrkt_cd LIKE ? || '%'")
+        params.append(q["region"])
     # 공판장(농협·원협 등)은 법인명 끝에 '(공)'이 붙어 온다
     if q.get("corp_type") == "gong":
         where.append("corp_nm LIKE '%(공)%'")
@@ -229,8 +234,57 @@ def api_item(q: dict) -> dict:
             **{k: r[k] for k in ("variety", "unit", "avg", "prev_avg", "low", "high", "amount")},
             "trend": [{"date": p["date"], "avg": p["avg"]} for p in trend],
             "markets": [{k: m[k] for k in ("market", "corp", "avg", "low", "high")} for m in markets],
+            "local": local_detail(key, latest),
         })
-    return {"name": name, "date": latest, "rows": out}
+    return {"name": name, "date": latest, "rows": out, "region": LOCAL_REGION["name"]}
+
+
+def local_detail(key: dict, latest: str) -> dict | None:
+    """한 품목(품종·단위)의 지역 상세: 지역 평균, 두 달 추이, 법인·공판장별 / 등급별 가격.
+
+    그날 지역에 거래가 없으면 최근 30일 안의 마지막 지역 경매일 기준으로 보여준다.
+    """
+    extra, params = market_filter({"region": LOCAL_REGION["code"]})
+    cond = f"gds_mclsf_nm IS ? AND gds_sclsf_nm IS ? AND {UNIT} = ? {extra}"
+    base = (key["item"], key["variety"], key["unit"], *params)
+    days = rows(
+        f"""SELECT DISTINCT trd_clcln_ymd AS d FROM trades
+            WHERE {cond} AND trd_clcln_ymd BETWEEN date(?, '-30 day') AND ?
+              AND trd_clcln_ymd IN ({TRADING_DAYS})
+            ORDER BY d DESC LIMIT 2""",
+        (*base, latest, latest),
+    )
+    if not days:
+        return None
+    day = days[0]["d"]
+    boxes = "SUM(totprc / avgprc)"  # 거래 상자(단위) 수 = 총금액 / 평균가
+    summary_sql = f"""SELECT {WEIGHTED_AVG} AS avg, {LOW} AS low, MAX(hgprc) AS high, {boxes} AS boxes
+                      FROM trades WHERE trd_clcln_ymd = ? AND {cond}"""
+    total = rows(summary_sql, (day, *base))[0]
+    prev = rows(summary_sql, (days[1]["d"], *base))[0]["avg"] if len(days) > 1 else None
+    corps = rows(
+        f"""SELECT whsl_mrkt_nm AS market, corp_nm AS corp, {WEIGHTED_AVG} AS avg,
+                   {LOW} AS low, MAX(hgprc) AS high, {boxes} AS boxes
+            FROM trades WHERE trd_clcln_ymd = ? AND {cond}
+            GROUP BY 1, 2 ORDER BY avg DESC""",
+        (day, *base),
+    )
+    grades = rows(
+        f"""SELECT whsl_mrkt_nm AS market, corp_nm AS corp, COALESCE(grd_nm, '-') AS grade,
+                   {WEIGHTED_AVG} AS avg, {LOW} AS low, MAX(hgprc) AS high, {boxes} AS boxes
+            FROM trades WHERE trd_clcln_ymd = ? AND {cond}
+            GROUP BY 1, 2, 3 ORDER BY avg DESC""",
+        (day, *base),
+    )
+    for c in corps:
+        c["grades"] = [{k: g[k] for k in ("grade", "avg", "low", "high", "boxes")}
+                       for g in grades if g["market"] == c["market"] and g["corp"] == c["corp"]]
+    trend = api_trend({**key, "region": LOCAL_REGION["code"], "to": latest, "days": 60})
+    return {
+        "region": LOCAL_REGION["name"], "date": day, "prev_avg": prev, **total,
+        "trend": [{"date": p["date"], "avg": p["avg"]} for p in trend],
+        "corps": corps,
+    }
 
 
 ROUTES = {

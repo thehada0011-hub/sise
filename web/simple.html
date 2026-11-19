@@ -16,6 +16,7 @@
     --green: #1f5e2c; --green-dark: #164722; --green-soft: #e7f1e9;
     --up: #c62828; --up-bg: #fdecea; --down: #1251a3; --down-bg: #e8f0fb; --flat-bg: #efefef;
     --star: #b7860b; --star-bg: #fff4d6;
+    --local: #d2691e; --local-dark: #9a4a0e;  /* 지역(광주) 표시 색: 그래프 선·지역 평균 */
   }
   html { font-size: 100%; -webkit-text-size-adjust: 100%; }
   html[data-size="1"] { font-size: 115%; }
@@ -103,6 +104,29 @@
   .tag.hi { background: var(--up-bg); color: var(--up); }
   .tag.lo { background: var(--down-bg); color: var(--down); }
   .more-btn { width: 100%; min-height: 3.5rem; margin-top: 8px; border: 2px solid var(--ink); border-radius: 14px; background: var(--card); font-weight: 800; }
+
+  /* 그래프 범례 · 지역(광주) 상세 */
+  .legend { display: flex; gap: 16px; font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 24px; height: 5px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+  .lp { font-size: 2.6rem; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--local-dark); }
+  .lp small { font-size: 1.4rem; font-weight: 700; margin-left: 4px; }
+  .lsub { font-size: 1.05rem; color: var(--ink2); margin-top: 4px; }
+  .cmp { font-size: 1.2rem; font-weight: 800; margin-top: 8px; }
+  .cmp.up { color: var(--up); } .cmp.down { color: var(--down); }
+  .more { font-size: 1.15rem; font-weight: 700; color: var(--ink2); margin: 16px 4px 0; }
+  .corp { background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 14px 16px 6px; margin-top: 10px; }
+  .ctop { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .ctop .nm { font-size: 1.25rem; font-weight: 800; }
+  .ctop .nm small { display: block; font-size: 1rem; font-weight: 500; color: var(--ink2); }
+  .ctop .pr { font-size: 1.5rem; font-weight: 900; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; font-size: 0.85rem; font-weight: 800; color: var(--green); background: var(--green-soft); border-radius: 8px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+  .grades { margin-top: 10px; border-top: 1px solid var(--line); }
+  .g { display: grid; grid-template-columns: 3rem 1fr auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 1.15rem; }
+  .g:last-child { border-bottom: 0; }
+  .gb { display: inline-grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 10px; background: var(--flat-bg); font-weight: 800; }
+  .gq { color: var(--ink2); font-size: 1.05rem; }
+  .g b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+  .flocal { font-size: 1.15rem; color: var(--local-dark); margin-top: 8px; }
 
   /* 즐겨찾기 카드 */
   .fcard { display: block; width: 100%; text-align: left; background: var(--card); border: 2px solid var(--line); border-radius: 22px;
@@ -213,11 +237,20 @@ function changeInfo(cur, prev, label = "지난 경매") {
   };
 }
 
-function speech(name, r, date) {
+// 지역 평균을 전국 평균과 비교한 말 ("전국보다 1,800원 비싸요")
+function vsNational(local, national) {
+  const diff = round100(local - national);
+  if (!diff) return { text: "전국 평균과 비슷해요", say: "전국 평균과 비슷해요." };
+  const word = diff > 0 ? "비싸요" : "싸요";
+  return { cls: diff > 0 ? "up" : "down", text: `전국 평균보다 ${Math.abs(diff).toLocaleString("ko-KR")}원 ${word}`, say: `전국 평균보다 ${Math.abs(diff)}원 ${word}.` };
+}
+
+function speech(name, r, date, region) {
   const label = [name, hasVariety(r, name) ? r.variety : ""].filter(Boolean).join(" ");
   const unit = r.unit ? r.unit.replace("kg", "킬로").replace(/(\d)g$/, "$1그램") + " 기준, " : "";
   const when = date && date !== base?.date ? `${dayText(date)} 경매, ` : "";
-  return `${label}, ${when}${unit}전국 평균 ${round100(r.avg)}원입니다. ${changeInfo(r.avg, r.prev_avg).say}`;
+  const local = r.local ? ` ${region}는 평균 ${round100(r.local.avg)}원으로 ${vsNational(r.local.avg, r.avg).say}` : "";
+  return `${label}, ${when}${unit}전국 평균 ${round100(r.avg)}원입니다. ${changeInfo(r.avg, r.prev_avg).say}${local}`;
 }
 
 let koVoice = null;
@@ -314,45 +347,86 @@ function viewHome() {
 }
 
 /* ---------------- 품목 화면 ---------------- */
-function chart(trend) {
+// 전국 평균선(초록)과 지역 평균선(주황)을 같은 눈금에 함께 그린다
+function chart(trend, localTrend, region) {
   const pts = trend.filter((p) => p.avg);
+  const lpts = (localTrend || []).filter((p) => p.avg);
   if (pts.length < 2) return `<div class="chart-note">그래프를 그릴 만큼 거래 기록이 없어요.</div>`;
   const W = 340, H = 190, P = { l: 6, r: 14, t: 16, b: 30 };
+  const dates = [...new Set([...pts, ...lpts].map((p) => p.date))].sort();
   const vals = pts.map((p) => p.avg);
-  let min = Math.min(...vals), max = Math.max(...vals);
+  const all = [...vals, ...lpts.map((p) => p.avg)];
+  let min = Math.min(...all), max = Math.max(...all);
   if (min === max) { min *= 0.95; max *= 1.05; }
-  const x = (i) => P.l + (i / (pts.length - 1)) * (W - P.l - P.r);
+  const x = (date) => P.l + (dates.indexOf(date) / Math.max(dates.length - 1, 1)) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - (v - min) / (max - min)) * (H - P.t - P.b);
-  const line = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.avg).toFixed(1)}`).join("");
-  const area = `${line}L${x(pts.length - 1).toFixed(1)},${H - P.b}L${x(0).toFixed(1)},${H - P.b}Z`;
-  const last = pts.length - 1;
+  const path = (list) => list.map((p, i) => `${i ? "L" : "M"}${x(p.date).toFixed(1)},${y(p.avg).toFixed(1)}`).join("");
+  const line = path(pts);
+  const area = `${line}L${x(pts.at(-1).date).toFixed(1)},${H - P.b}L${x(pts[0].date).toFixed(1)},${H - P.b}Z`;
   const hi = vals.indexOf(Math.max(...vals)), lo = vals.indexOf(Math.min(...vals));
-  const first = pts[0], end = pts[last];
+  const first = pts[0], end = pts.at(-1);
   const ch = changeInfo(end.avg, first.avg, shortDay(first.date));
+  const hasLocal = lpts.length >= 2;
   return `
-    <div class="chart-note">가장 비쌀 때 <b>${won(vals[hi])}원</b> (${shortDay(pts[hi].date)}) · 가장 쌀 때 <b>${won(vals[lo])}원</b> (${shortDay(pts[lo].date)})</div>
+    <div class="legend"><span><i style="background:var(--green)"></i>전국 평균</span>${hasLocal ? `<span><i style="background:var(--local)"></i>${esc(region)}</span>` : ""}</div>
+    <div class="chart-note">전국이 가장 비쌀 때 <b>${won(vals[hi])}원</b> (${shortDay(pts[hi].date)}) · 가장 쌀 때 <b>${won(vals[lo])}원</b> (${shortDay(pts[lo].date)})</div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 가격 그래프" style="width:100%;height:auto">
       <line x1="${P.l}" x2="${W - P.r}" y1="${H - P.b}" y2="${H - P.b}" stroke="#bdb6a6" stroke-width="1.5"/>
       <path d="${area}" fill="var(--green)" opacity="0.10"/>
+      ${hasLocal ? `<path d="${path(lpts)}" fill="none" stroke="var(--local)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${x(lpts.at(-1).date)}" cy="${y(lpts.at(-1).avg)}" r="6" fill="var(--local)" stroke="#fff" stroke-width="2.5"/>` : ""}
       <path d="${line}" fill="none" stroke="var(--green)" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
-      <circle cx="${x(hi)}" cy="${y(vals[hi])}" r="5" fill="var(--up)"/>
-      <circle cx="${x(lo)}" cy="${y(vals[lo])}" r="5" fill="var(--down)"/>
-      <circle cx="${x(last)}" cy="${y(end.avg)}" r="7" fill="var(--green)" stroke="#fff" stroke-width="3"/>
-      <text x="${P.l}" y="${H - 8}" font-size="15" fill="#3b3b3b">${shortDay(first.date)}</text>
-      <text x="${W - P.r}" y="${H - 8}" font-size="15" fill="#3b3b3b" text-anchor="end">${shortDay(end.date)}</text>
+      <circle cx="${x(pts[hi].date)}" cy="${y(vals[hi])}" r="5" fill="var(--up)"/>
+      <circle cx="${x(pts[lo].date)}" cy="${y(vals[lo])}" r="5" fill="var(--down)"/>
+      <circle cx="${x(end.date)}" cy="${y(end.avg)}" r="7" fill="var(--green)" stroke="#fff" stroke-width="3"/>
+      <text x="${P.l}" y="${H - 8}" font-size="15" fill="#3b3b3b">${shortDay(dates[0])}</text>
+      <text x="${W - P.r}" y="${H - 8}" font-size="15" fill="#3b3b3b" text-anchor="end">${shortDay(dates.at(-1))}</text>
     </svg>
-    <div class="chart-sum" style="color:var(--${ch.cls === "flat" ? "ink2" : ch.cls})">${ch.text}</div>`;
+    <div class="chart-sum" style="color:var(--${ch.cls === "flat" ? "ink2" : ch.cls})">전국 ${ch.text}</div>`;
 }
 
-const MKT_SHOW = 8;
-function marketList(markets, showAll) {
+// 지역 상세: 지역 평균 + 법인·공판장별 가격 + 그 안의 등급별 가격
+const GRADE_ORDER = ["특", "상", "중", "하"];
+const gradeRank = (g) => { const i = GRADE_ORDER.indexOf(g); return i < 0 ? 99 : i; };
+const boxes = (n) => `${Math.round(n || 0).toLocaleString("ko-KR")}상자`;
+
+function localSection(loc, r, region, nationalDate) {
+  if (!loc) return `<h3>${esc(region)} 시세</h3>
+    <div class="panel"><div class="chart-note">최근 한 달 동안 ${esc(region)} 도매시장 거래가 없어요.</div></div>`;
+  const ch = changeInfo(loc.avg, loc.prev_avg);
+  const vs = vsNational(loc.avg, r.avg);
+  const when = loc.date !== nationalDate ? ` · ${dayText(loc.date)} 경매` : "";
+  const corps = loc.corps.map((c) => {
+    const gong = /\(공\)/.test(c.corp);
+    const grades = [...c.grades].sort((a, b) => gradeRank(a.grade) - gradeRank(b.grade) || b.avg - a.avg);
+    return `<div class="corp">
+      <div class="ctop">
+        <div class="nm">${esc(c.corp.replace("(공)", ""))}${gong ? `<span class="badge">공판장</span>` : ""}<small>${esc(c.market)} · ${boxes(c.boxes)}</small></div>
+        <div class="pr">${won(c.avg)}원</div>
+      </div>
+      <div class="grades">${grades.map((g) => `
+        <div class="g"><span class="gb">${esc(g.grade)}</span><span class="gq">${boxes(g.boxes)}</span><b>${won(g.avg)}원</b></div>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+  return `<h3>${esc(region)} 시세 상세</h3>
+    <div class="panel">
+      <div class="lp">${won(loc.avg)}<small>원</small></div>
+      <div class="lsub">${esc(region)} 평균 · ${boxes(loc.boxes)} 거래${when}</div>
+      <div class="cmp ${vs.cls || ""}">${vs.text}</div>
+      <div class="chg ${ch.cls}">${ch.text}</div>
+      <div class="range">싼 것 ${won(loc.low)}원 ~ 비싼 것 ${won(loc.high)}원</div>
+    </div>
+    <div class="more">법인·공판장별 / 등급별 가격</div>
+    ${corps}`;
+}
+
+function marketList(markets) {
   if (!markets.length) return `<div class="chart-note">시장별 기록이 없어요.</div>`;
   const sorted = [...markets].sort((a, b) => b.avg - a.avg);
-  const list = showAll ? sorted : sorted.slice(0, MKT_SHOW);
-  return list.map((m) => `<div class="mkt">
+  return sorted.map((m) => `<div class="mkt">
       <div class="nm">${esc(m.market)}${sorted.length > 1 && m === sorted[0] ? `<span class="tag hi">가장 비쌈</span>` : ""}${sorted.length > 1 && m === sorted.at(-1) ? `<span class="tag lo">가장 쌈</span>` : ""}<small>${esc(m.corp)}</small></div>
-      <div class="pr">${won(m.avg)}원</div></div>`).join("")
-    + (!showAll && sorted.length > MKT_SHOW ? `<button class="more-btn" id="moreMkt">전국 ${sorted.length}곳 모두 보기</button>` : "");
+      <div class="pr">${won(m.avg)}원</div></div>`).join("");
 }
 
 async function viewItem(name, variety, unit) {
@@ -369,6 +443,7 @@ async function viewItem(name, variety, unit) {
   const fav = { item: name, variety: r.variety, unit: r.unit };
   const ch = changeInfo(r.avg, r.prev_avg);
   const others = data.rows.filter((x) => x !== r);
+  const region = data.region || "광주";
   $("view").innerHTML = `
     <div class="item-head">
       <div class="name">${esc(name)}${hasVariety(r, name) ? `<span>${esc(r.variety)}</span>` : ""}</div>
@@ -384,20 +459,21 @@ async function viewItem(name, variety, unit) {
       </div>
     </div>
     <h3>최근 두 달 가격</h3>
-    <div class="panel">${chart(r.trend)}</div>
+    <div class="panel">${chart(r.trend, r.local?.trend, region)}</div>
+    ${localSection(r.local, r, region, data.date)}
     ${others.length ? `<h3>다른 종류·단위</h3>${others.slice(0, 6).map((x) => `
       <button class="rowbtn" data-go="${esc(itemHash(name, x.variety, x.unit))}"><span>${esc(hasVariety(x, name) ? x.variety : name)}<span class="sub">${esc(x.unit)} 기준</span></span><b>${won(x.avg)}원</b></button>`).join("")}` : ""}
-    <h3>전국 시장별 시세</h3>
-    <div class="panel" id="mktPanel">${marketList(r.markets, false)}</div>`;
-  $("speakBtn").addEventListener("click", () => say(speech(name, r, data.date)));
+    <h3>다른 지역 시세</h3>
+    <div id="mktPanel">${r.markets.length ? `<button class="more-btn" id="moreMkt">전국 시장 ${r.markets.length}곳 모두 보기</button>` : `<div class="chart-note">시장별 기록이 없어요.</div>`}</div>`;
+  $("speakBtn").addEventListener("click", () => say(speech(name, r, data.date, region)));
   $("favBtn").addEventListener("click", (e) => {
     const on = toggleFav(fav);
     e.currentTarget.classList.toggle("on", on);
     e.currentTarget.innerHTML = `${ICON.star(on)}<span>${on ? "즐겨찾기 됨" : "즐겨찾기"}</span>`;
     say(on ? "즐겨찾기에 넣었어요." : "즐겨찾기에서 뺐어요.");
   });
-  $("mktPanel").addEventListener("click", (e) => { if (e.target.id === "moreMkt") $("mktPanel").innerHTML = marketList(r.markets, true); });
-  if (autoSpeak) { autoSpeak = false; say(speech(name, r, data.date)); }
+  $("mktPanel").addEventListener("click", (e) => { if (e.target.id === "moreMkt") $("mktPanel").innerHTML = `<div class="panel">${marketList(r.markets)}</div>`; });
+  if (autoSpeak) { autoSpeak = false; say(speech(name, r, data.date, region)); }
 }
 
 /* ---------------- 즐겨찾기 ---------------- */
@@ -418,8 +494,9 @@ async function viewFav() {
     if (!r) return `<button class="fcard" data-go="${esc(itemHash(f.item, f.variety, f.unit))}">${head}<div class="range">최근 거래가 없어요</div></button>`;
     const ch = changeInfo(r.avg, r.prev_avg);
     const older = d.date !== base.date ? `<div class="range">${dayText(d.date)} 경매</div>` : "";
+    const local = r.local ? `<div class="flocal">${esc(d.region || "광주")} 평균 <b>${won(r.local.avg)}원</b></div>` : "";
     return `<button class="fcard" data-go="${esc(itemHash(f.item, f.variety, f.unit))}">${head}
-      <div class="price">${won(r.avg)}<small>원</small></div><div class="chg ${ch.cls}">${ch.text}</div>${older}</button>`;
+      <div class="price">${won(r.avg)}<small>원</small></div><div class="chg ${ch.cls}">${ch.text}</div>${local}${older}</button>`;
   }).join("");
 }
 
